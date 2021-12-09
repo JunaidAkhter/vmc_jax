@@ -1,6 +1,7 @@
 import sys
 # Find jVMC package
-sys.path.append("/Users/akhter/githesis-/jvmc/vmc_jax")
+sys.path.append("/p/home/jusers/akhter1/jureca/project/jvmc/vmc_jax")
+
 
 import jax
 from jax.config import config
@@ -85,6 +86,7 @@ class MPO(nn.Module):
         legs.append([ i for i in range(1,n+1)]) # naming list for input legs from the data
         #print('n:', n, 'input_dimensions:', inp_dms, 'output_dimensions:', oup_dm, 'D:', D)
         
+        D = bond_dms[0]
         a = 1/(inp_dms[1]*inp_dms[2]*oup_dms[0]*(D**3)*oup_dms[1]**2 * oup_dms[2]**2)
         b = 1/(inp_dms[0]*inp_dms[2]*oup_dms[0]**2*(D**2)*oup_dms[1] * oup_dms[2]**2)
         c = 1/(inp_dms[1]*inp_dms[0]*oup_dms[2]*(D**3)*oup_dms[1]**2 * oup_dms[0]**2)
@@ -146,7 +148,7 @@ class MyNet(flax.linen.Module):
 
         return jnp.sum(jnp.log(jnp.cosh(apply_mpo(2 * s - 1))))
 
-net_init = MyNet(num_nodes = 3, inp_dims = (2,3,2), oup_dims = (2,3,2), bond_dims=(4,5)) 
+net_init = MyNet(num_nodes = 3, inp_dims = (2,3,2), oup_dims = (2,3,2), bond_dims=(4,4)) 
 params = net_init.init(jax.random.PRNGKey(1),jnp.zeros((L,), dtype=global_defs.tCpx)) # the "dtype" here is not so important
 print("Shape of the model", jax.tree_map(np.shape, params))
 
