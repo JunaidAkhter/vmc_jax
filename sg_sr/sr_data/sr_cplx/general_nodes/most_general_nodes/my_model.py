@@ -86,11 +86,11 @@ class MPO(nn.Module):
         legs.append([ i for i in range(1,n+1)]) # naming list for input legs from the data
         #print('n:', n, 'input_dimensions:', inp_dms, 'output_dimensions:', oup_dm, 'D:', D)
         
-        D = bond_dms[0]
-        a = 1/(inp_dms[1]*inp_dms[2]*oup_dms[0]*(D**3)*oup_dms[1]**2 * oup_dms[2]**2)
-        b = 1/(inp_dms[0]*inp_dms[2]*oup_dms[0]**2*(D**2)*oup_dms[1] * oup_dms[2]**2)
-        c = 1/(inp_dms[1]*inp_dms[0]*oup_dms[2]*(D**3)*oup_dms[1]**2 * oup_dms[0]**2)
-        d = (a*b*c)**(1/5)
+        #D = bond_dms[0]
+        #a = 1/(inp_dms[1]*inp_dms[2]*oup_dms[0]*(D**3)*oup_dms[1]**2 * oup_dms[2]**2)
+        #b = 1/(inp_dms[0]*inp_dms[2]*oup_dms[0]**2*(D**2)*oup_dms[1] * oup_dms[2]**2)
+        #c = 1/(inp_dms[1]*inp_dms[0]*oup_dms[2]*(D**3)*oup_dms[1]**2 * oup_dms[0]**2)
+        #d = (a*b*c)**(1/5)
         
         n_d = sum(list(bond_dms))/len(bond_dms)
         v = 1
@@ -107,20 +107,20 @@ class MPO(nn.Module):
         for i, dm in enumerate(inp_dms):
             if i == 0:
                 #print('i:', i, 'dm:', dm)
-                print("var:",d**2/a, "var_func:", var_calc(i,v) )
-                nodes.append(self.param('a'+str(i), partial(init.cplx_init1, var = d**2/a), (oup_dms[i],dm,D))) # include the node name later
+                #print("var:",d**2/a, "var_func:", var_calc(i,v) )
+                nodes.append(self.param('a'+str(i), partial(init.cplx_init1, var = var_calc(i, v)), (oup_dms[i],dm,bond_dms[i]))) # include the node name later
                
                 legs.append([-1,1,n+1])
             elif i == n-1:
                 #print('i:', i, 'dm:', dm)
-                print("var:",d**2/c, "var_func:", var_calc(i,v) )
-                nodes.append(self.param('a'+str(i), partial(init.cplx_init1, var = d**2/c), (dm,oup_dms[i],D)))
+                #print("var:",d**2/c, "var_func:", var_calc(i,v) )
+                nodes.append(self.param('a'+str(i), partial(init.cplx_init1, var = var_calc(i,v)), (dm,oup_dms[i],bond_dms[i-1])))
                 legs.append([n, -n, 2*n-1])
 
             else:
                 #print('i:', i, 'dm:', dm)
-                print("var:",d**2/b, "var_func:", var_calc(i,v) )
-                nodes.append(self.param('a'+str(i),  partial(init.cplx_init1, var = d**2/b), (dm,D,oup_dms[i],D)))
+                #print("var:",d**2/b, "var_func:", var_calc(i,v) )
+                nodes.append(self.param('a'+str(i),  partial(init.cplx_init1, var = var_calc(i,v)), (dm,bond_dms[i],oup_dms[i],bond_dms[i-1])))
                 legs.append([i+1, n+(i+1), -(i+1), n+(i)])
         # creating the bias which we need to add at the end
         #bias = self.param('bias', self.kernel_init, [oup_dm]*n)
@@ -148,14 +148,6 @@ class MyNet(flax.linen.Module):
 
         return jnp.sum(jnp.log(jnp.cosh(apply_mpo(2 * s - 1))))
 
-net_init = MyNet(num_nodes = 3, inp_dims = (2,3,2), oup_dims = (2,3,2), bond_dims=(4,4)) 
-params = net_init.init(jax.random.PRNGKey(1),jnp.zeros((L,), dtype=global_defs.tCpx)) # the "dtype" here is not so important
-print("Shape of the model", jax.tree_map(np.shape, params))
-
-"""
-# Initialize net
-#net = MyNet(num_nodes = 2, inp_dims = jnp.array([5,2]), oup_dim = 6, D = 7) # D = 07 in reality
-
 
 
 # Set up hamiltonian for open boundary conditions
@@ -168,7 +160,7 @@ hamiltonian.add(jVMC.operator.scal_opstr(g, (jVMC.operator.Sx(L - 1), )))
 
 
 
-def simulate(rng, iterations, D):
+def simulate(rng, iterations):
     net = net_init
     psi = jVMC.vqs.NQS(net, seed=rng)  # Variational wave function
     #Checking the dhape of the mpo and the values of the initialized parameters
@@ -180,7 +172,7 @@ def simulate(rng, iterations, D):
     # Set up sampler
     sampler = jVMC.sampler.MCSampler(psi, (L,), random.PRNGKey(4321), updateProposer=jVMC.sampler.propose_spin_flip_Z2,
                                  numChains=100, sweepSteps=L,
-                                 numSamples=30000, thermalizationSweeps=25)
+                                 numSamples=50000, thermalizationSweeps=25)
 
     # Set up TDVP
     tdvpEquation = jVMC.util.tdvp.TDVP(sampler, rhsPrefactor=1.,
@@ -211,16 +203,15 @@ rng_list = [0]
 
 E_0_aarray = np.zeros((iterations, len(rng_list)))#an empty two dimensional array corresponding to the D and "rng".
 
-D = 4
 #Printing the shape of parameters
-net_init = MyNet(num_nodes = 3, inp_dims = (2,3,2), oup_dims = (4,3,3), D=D) 
+net_init = MyNet(num_nodes = 3, inp_dims = (2,3,2), oup_dims = (4,3,3), bond_dims = (5,6)) 
 params = net_init.init(jax.random.PRNGKey(1),jnp.zeros((L,), dtype=global_defs.tCpx)) # the "dtype" here is not so important
 print("Shape of the model", jax.tree_map(np.shape, params))
 
 
 for j,rng in enumerate(rng_list):
     print("rng:", rng)
-    res = simulate(rng, iterations, D=D)
+    res = simulate(rng, iterations)
     E_0 = res + 1.0660513358196495#this energy is for 12 spins
     #adding the energy values obtained to the first entry of the row
     #print("length", len(E_0))
@@ -228,5 +219,5 @@ for j,rng in enumerate(rng_list):
     #print("final_energy:", E_0[-1])
 
 
-#np.savetxt('cpxmpo_12_avg_d1_232_gs', E_0_aarray, header='Data for rlmpo with D = 1 for 10 different initializations')
-"""
+np.savetxt('cpxmpo_12_avg_d1_232_gs', E_0_aarray, header='Data for rlmpo with D = 1 for 10 different initializations')
+
