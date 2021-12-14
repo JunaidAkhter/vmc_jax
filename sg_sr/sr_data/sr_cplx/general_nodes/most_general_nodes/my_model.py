@@ -1,6 +1,8 @@
 import sys
 # Find jVMC package
-sys.path.append("/p/home/jusers/akhter1/jureca/project/jvmc/vmc_jax")
+#sys.path.append("/p/home/jusers/akhter1/jureca/project/jvmc/vmc_jax")
+sys.path.append("/Users/akhter/thesis/vmc_jax")
+
 
 
 import jax
@@ -37,16 +39,14 @@ import jVMC.global_defs as global_defs
 
 
 import time
-start = time.time()
-
 
 # DMRG energies produced with the TeNPy library https://github.com/tenpy/tenpy
 #DMRG_energies = {"10": -1.0545844370449059, "20": -1.0900383739, "100": -1.1194665474274852}
 
-L = 12 # system size
+L = 32 # system size
 g = -0.7 # strength of external field
 
-
+tik = time.perf_counter()
 #FIRST WE DEFINE AN MPO LAYER
 
 class MPO(nn.Module):
@@ -91,7 +91,7 @@ class MPO(nn.Module):
         #b = 1/(inp_dms[0]*inp_dms[2]*oup_dms[0]**2*(D**2)*oup_dms[1] * oup_dms[2]**2)
         #c = 1/(inp_dms[1]*inp_dms[0]*oup_dms[2]*(D**3)*oup_dms[1]**2 * oup_dms[0]**2)
         #d = (a*b*c)**(1/5)
-        
+       
         n_d = sum(list(bond_dms))/len(bond_dms)
         v = 1
         def var_calc(i, v):
@@ -158,16 +158,12 @@ for l in range(L - 1):
 hamiltonian.add(jVMC.operator.scal_opstr(g, (jVMC.operator.Sx(L - 1), )))
 
 
+def simulate(rng, iterations, t_step = 1e-2): #Original t = 1e-2
 
-
-def simulate(rng, iterations):
     net = net_init
-    psi = jVMC.vqs.NQS(net, seed=rng)  # Variational wave function
-    #Checking the dhape of the mpo and the values of the initialized parameters
-    #params = net.init(jax.random.PRNGKey(1),jnp.zeros((L,), dtype=global_defs.tCpx)) # the "dtype" here is not so important
-    #print("Shape of the model", jax.tree_map(np.shape, params))
-    #print("parameters:", params)
 
+    psi = jVMC.vqs.NQS(net,batchSize=10000, seed=rng)  # Variational wave function
+    #Checking the dhape of the mpo and the values of the initialized parameters
 
     # Set up sampler
     sampler = jVMC.sampler.MCSampler(psi, (L,), random.PRNGKey(4321), updateProposer=jVMC.sampler.propose_spin_flip_Z2,
@@ -178,7 +174,7 @@ def simulate(rng, iterations):
     tdvpEquation = jVMC.util.tdvp.TDVP(sampler, rhsPrefactor=1.,
                                    svdTol=1e-8, diagonalShift=50, makeReal='real')
 
-    stepper = jVMC.util.stepper.Euler(timeStep=1e-2)  # ODE integrator
+    stepper = jVMC.util.stepper.Euler(timeStep=t_step)  # ODE integrator
 
 
 
@@ -186,38 +182,38 @@ def simulate(rng, iterations):
     for n in range(iterations):
         dp, _ = stepper.step(0, tdvpEquation, psi.get_parameters(), hamiltonian=hamiltonian, psi=psi, numSamples=None)
         psi.set_parameters(dp)
-
-        print(n, jax.numpy.real(tdvpEquation.ElocMean0) / L, tdvpEquation.ElocVar0 / L)
-
-        res.append([jax.numpy.real(tdvpEquation.ElocMean0) / L])
+        res.append([jax.numpy.real(tdvpEquation.ElocMean0) /L])
 
     return np.array(res)
 
 
 #CREATING DATA
 
-#iterations = 1500
-#rng_list = [0,1,2,3,4,5,6,7,8,9,10]
-iterations = 1
+iterations = 10
+#rng_list = [0,1,2,3,4,5,6,7,8,9]
+#iterations = 1
 rng_list = [0]
-
+time_step = 80e-2
 E_0_aarray = np.zeros((iterations, len(rng_list)))#an empty two dimensional array corresponding to the D and "rng".
 
 #Printing the shape of parameters
-net_init = MyNet(num_nodes = 3, inp_dims = (2,3,2), oup_dims = (4,3,3), bond_dims = (5,6)) 
+net_init = MyNet(num_nodes = 2, inp_dims = (2,16), oup_dims = (2,16), bond_dims = (4,)) 
 params = net_init.init(jax.random.PRNGKey(1),jnp.zeros((L,), dtype=global_defs.tCpx)) # the "dtype" here is not so important
 print("Shape of the model", jax.tree_map(np.shape, params))
 
 
 for j,rng in enumerate(rng_list):
-    print("rng:", rng)
-    res = simulate(rng, iterations)
-    E_0 = res + 1.0660513358196495#this energy is for 12 spins
+    #print("rng:", rng)
+    res = simulate(rng, iterations, t_step = time_step)
+    E_0 = res + 1.1038222181006074 #this energy is for 32 spins
     #adding the energy values obtained to the first entry of the row
     #print("length", len(E_0))
     E_0_aarray[:, j] = E_0[:, 0]
-    #print("final_energy:", E_0[-1])
+
+tok = time.perf_counter()
+
+print("   == Total time for running the script: %fs\n" % (tok - tik))
 
 
-np.savetxt('cpxmpo_12_avg_d1_232_gs', E_0_aarray, header='Data for rlmpo with D = 1 for 10 different initializations')
+np.savetxt('cpxmpo_32_avg_d4_216_sr', E_0_aarray, header='Data for cpxmpo with D = 4 for 10 different initializations')
 
