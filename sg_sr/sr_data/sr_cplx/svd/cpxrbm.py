@@ -37,7 +37,7 @@ import time
 # DMRG energies produced with the TeNPy library https://github.com/tenpy/tenpy
 #DMRG_energies = {"10": -1.0545844370449059, "20": -1.0900383739, "100": -1.1194665474274852}
 
-L = 8 # system size
+L = 16 # system size
 g = -0.7 # strength of external field
 
 # Set up hamiltonian for open boundary conditions
@@ -47,7 +47,7 @@ for l in range(L - 1):
     hamiltonian.add(jVMC.operator.scal_opstr(g, (jVMC.operator.Sx(l), )))
 hamiltonian.add(jVMC.operator.scal_opstr(g, (jVMC.operator.Sx(L - 1), )))
 
-def svd(dp,shape, r=L):
+def svd(dp,shape, rank=L):
 
     """Takes in the concatenated matrix and spits out the copressed one"""
         
@@ -72,7 +72,7 @@ def svd(dp,shape, r=L):
     return matrix_returned
         
 
-def simulate(rng, iterations, h, t_step):
+def simulate(rng, iterations, rank, t_step):
     net = net_init
     psi = jVMC.vqs.NQS(net, seed=rng)  # Variational wave function
 
@@ -98,7 +98,7 @@ def simulate(rng, iterations, h, t_step):
     for n in range(iterations):
         dp, _ = stepper.step(0, tdvpEquation, psi.get_parameters(), hamiltonian=hamiltonian, psi=psi, numSamples=None)
         print("dp_inserted", dp)
-        dp = svd(dp, (4,4,2,2), L)
+        dp = svd(dp, (4,4,2,2), rank = r)
         
         dp = jnp.concatenate([p.ravel() for p in tree_flatten(dp)[0]])
         dp = jnp.concatenate([dp.real, dp.imag])
@@ -116,22 +116,30 @@ def simulate(rng, iterations, h, t_step):
 #rng_list = [0, 1, 2, 3, 4, 5,  6, 7, 8, 9, 10]
 
 iterations = 2
-rng_list = [0]
+rng_list = [0, 1]
 time_step = 12e-2 
-E_0_aarray = np.zeros((iterations, len(rng_list)))#an empty two dimensional array corresponding to the D and "rng".
-
 h = L
 net_init = jVMC.nets.CpxRBM(numHidden = h, bias = False)
 
+#rank_list = jnp.arange(L/2, L+1)
+rank_list = [8,9]
+results = []
 for j,rng in enumerate(rng_list):
-    #print("rng:", rng)
-    res = simulate(rng, iterations, h=h, t_step = time_step)
-    E_0 = res + 1.0660513358196495#this energy is for 36 spins
-    #adding the energy values obtained to the first entry of the row
-    #print("length", len(E_0))
-    E_0_aarray[:, j] = E_0[:, 0]
-    #print("final_energy:", E_0[-1])
+    
+    E_0_aarray = np.zeros((iterations, len(rng_list)))#an empty two dimensional array corresponding to the D and "rng".
+
+    for r in rank_list:
+        
+        #print("rng:", rng)
+        res = simulate(rng, iterations, rank=r, t_step = time_step)
+        E_0 = res + 1.0660513358196495#this energy is for 16 spins
+        #adding the energy values obtained to the first entry of the row
+        #print("length", len(E_0))
+        E_0_aarray[:, j] = E_0[:, 0]
+        #print("final_energy:", E_0[-1])
+    
+    results.apend(E_0_aarray)
 
 #print("E_array", E_0_aarray)
 
-#np.savetxt('cpxrbm_12_avg_h36_sr_12t', E_0_aarray, header='Data for rlmpo with h = 36 for 5 initializations')
+np.savetxt('cpxrbm_16_h16_sr_12t', np.array(results), header='Data for CpxRBM with h = 16 for 1 initializations')
