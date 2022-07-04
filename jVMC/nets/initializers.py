@@ -34,7 +34,7 @@ def rl_init1(rng, shape, var):
 
 def cplx_init1(rng, shape, var):
     """This function initializes the real and the complex part of the complex initialization
-    by using the fact that Var[Z] = Var[Real(Z)] + Var[Img(Z)]"""
+    by using the fact that Var[Z] = Var[Real(Z)] + Var[Img(Z)], I am cool """
     
     rng1, rng2 = jax.random.split(rng)
     sigma_1_r = jnp.sqrt(var/2)
